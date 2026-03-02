@@ -74,39 +74,29 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
                 os.remove(img_path)
         out_files = sorted([f for f in os.listdir(temp_out) if f.endswith('.jpg')])
 
-    # 4. จัดการการส่งออกไฟล์
-    if zip_out:
-        zip_path = os.path.abspath("output_result.zip")
-        if os.path.exists(zip_path): os.remove(zip_path)
-        shutil.make_archive('output_result', 'zip', temp_out)
-        return zip_path
-    else:
-        return os.path.join(temp_out, out_files[0]) if out_files else None
+# --- ส่วนท้ายของฟังก์ชัน run_upscale ---
+    preview_img = os.path.join(temp_out, out_files[0]) if out_files else None
 
-# --- หน้า UI (ถอด Slider ออกตามคำขอ) ---
-with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("## 💎 SeedVR2 Pro Stock Upscaler")
-    gr.Markdown("ส่ง Adobe Stock ได้มั่นใจด้วย JPG Quality 100%")
-    
+    if zip_out:
+        zip_base = os.path.abspath("output_result")
+        shutil.make_archive(zip_base, 'zip', temp_out)
+        return preview_img, zip_base + ".zip" # ส่งกลับ 2 ค่า (รูปพรีวิว, ไฟล์ซิป)
+    else:
+        return preview_img, preview_img # ส่งกลับ 2 ค่า (รูปพรีวิว, ไฟล์รูป)
+
+# --- ส่วน UI ---
     with gr.Row():
         with gr.Column():
-            file_in = gr.File(label="Upload Images/ZIP", file_count="multiple")
-            model_choice = gr.Dropdown(
-                choices=["3B FP8 (สมดุล/ค่าเริ่มต้น)", "3B GGUF Q4 (ประหยัด VRAM ขั้นสุด)", "7B GGUF Q4 (สวยและประหยัด VRAM)", "7B FP8 (ภาพสวยสุด/กิน VRAM โหด)"], 
-                label="🧠 Model", value="3B FP8 (สมดุล/ค่าเริ่มต้น)"
-            )
-            upscale_size = gr.Radio(["2K (1440p)", "4K (2160p)", "6K (3240p)", "8K (4320p)"], label="Resolution", value="4K (2160p)")
-            format_out = gr.Radio(["png", "jpg"], label="Output Format", value="jpg")
-            zip_out = gr.Checkbox(label="Pack as ZIP", value=True)
-            submit_btn = gr.Button("🚀 Start Upscaling", variant="primary")
+            # ... (ฝั่ง input เหมือนเดิม)
             
         with gr.Column():
+            img_preview = gr.Image(label="Preview Result", type="filepath") # เพิ่มตัวโชว์รูป
             file_out = gr.File(label="Download Here ⬇️")
 
     submit_btn.click(
         fn=run_upscale,
         inputs=[file_in, format_out, zip_out, upscale_size, model_choice],
-        outputs=[file_out]
-    )
+        outputs=[img_preview, file_out] # ต้องมี 2 ตัวให้ตรงกับที่ return
+    ))
 
 demo.launch(server_name="0.0.0.0", share=True)

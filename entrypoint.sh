@@ -1,16 +1,21 @@
 #!/bin/bash
-# 1. เข้าไปในโฟลเดอร์งาน
-cd /root/SeedVR2
 
-# 2. ติดตั้ง Library (ขั้นตอนนี้อาจใช้เวลา 2-3 นาที)
-pip install -r requirements.txt
+# ย้ายไปที่พื้นที่หลักของ RunPod
+cd /workspace
 
-# 3. ตรวจสอบว่ามีโมเดลหรือยัง (ถ้าไม่มีให้โหลด - ตัวอย่างโมเดล 3B)
-if [ ! -f "models/seedvr2_ema_3b_fp8_e4m3fn.safetensors" ]; then
-    echo "📥 Downloading Model..."
-    # ใส่ URL ตรงของโมเดลคุณที่นี่
-    wget -O models/seedvr2_ema_3b_fp8_e4m3fn.safetensors https://huggingface.co/your-repo/model-url
+# Clone โค้ดถ้ายังไม่มี
+if [ ! -d "ComfyUI-SeedVR2_VideoUpscaler" ]; then
+    git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
 fi
 
-# 4. รันหน้าเว็บ Gradio
+cd ComfyUI-SeedVR2_VideoUpscaler
+
+# ติดตั้ง Dependencies
+pip install -r requirements.txt
+pip install gradio gradio-image-slider pillow
+
+# (นำโค้ด Python ด้านบนไปเซฟทับหรือสร้างเป็นไฟล์ app.py ในโฟลเดอร์นี้)
+# สมมติว่าคุณอัปโหลดไฟล์ app.py เข้ามาแล้ว
+
+# เริ่มรัน Web UI
 python app.py

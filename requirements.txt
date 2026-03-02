@@ -1,8 +1,0 @@
-gradio==4.44.1
-Pillow==10.3.0
-huggingface_hub==0.24.1
-omegaconf
-einops
-diffusers
-accelerate
-safetensors

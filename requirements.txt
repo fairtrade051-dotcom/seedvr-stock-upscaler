@@ -1,0 +1,8 @@
+gradio==4.26.0
+Pillow==10.3.0
+omegaconf
+einops
+diffusers
+accelerate
+safetensors
+# อย่าลืมใส่ library อื่นๆ ที่ SeedVR ตัวที่คุณใช้เรียกหาด้วยนะครับ

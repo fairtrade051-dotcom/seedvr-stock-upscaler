@@ -4,9 +4,7 @@ import zipfile
 import subprocess
 import shutil
 from PIL import Image
-from gradio_image_slider import ImageSlider
 
-# ใช้ /workspace เป็นหลักสำหรับ RunPod
 WORKSPACE_DIR = "/workspace/ComfyUI-SeedVR2_VideoUpscaler"
 
 def setup_dirs(input_dir, output_dir):
@@ -21,7 +19,7 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
     setup_dirs(temp_in, temp_out)
 
     if not input_files:
-        raise gr.Error("กรุณาอัปโหลดไฟล์ก่อนครับ!")
+        raise gr.Error("กรุณาอัปโหลดไฟล์ก่อน!")
         
     for file_obj in input_files:
         file_path = file_obj.name
@@ -31,7 +29,6 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
         else:
             shutil.copy(file_path, temp_in)
 
-    # คำนวณความละเอียดเป้าหมาย
     if "2K" in upscale_size: res_val = 1440
     elif "4K" in upscale_size: res_val = 2160
     elif "6K" in upscale_size: res_val = 3240
@@ -57,19 +54,18 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
         f"{temp_in}"
     )
     
-    # รันโดยให้ working directory อยู่ในโฟลเดอร์โปรเจกต์
     process = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=WORKSPACE_DIR)
     print(process.stdout)
     
     if process.returncode != 0:
         print(process.stderr)
-        raise gr.Error("รันล้มเหลว! การ์ดจออาจรับไม่ไหว ลองลดขนาดภาพหรือเปลี่ยนโมเดลดูครับ")
+        raise gr.Error("รันล้มเหลว! ลองลดขนาดภาพหรือเปลี่ยนโมเดล")
 
     out_files = sorted(os.listdir(temp_out))
     if not os.path.exists(temp_out) or len(out_files) == 0:
-        raise gr.Error("ไม่พบไฟล์ผลลัพธ์! AI ทำงานไม่สำเร็จ")
+        raise gr.Error("ไม่พบไฟล์ผลลัพธ์!")
 
-    # --- แปลงไฟล์เป็น JPG ด้วย Quality 100 ---
+    # แปลง JPG Quality 100
     if format_out == 'jpg':
         print("🔄 กำลังแปลงไฟล์เป็น JPG Quality 100...")
         for img in list(out_files):
@@ -78,11 +74,11 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
                 new_path = os.path.join(temp_out, img.replace('.png', '.jpg'))
                 with Image.open(img_path) as im:
                     rgb_im = im.convert('RGB')
-                    rgb_im.save(new_path, quality=100) # คงคุณภาพสูงสุด
+                    rgb_im.save(new_path, quality=100)
                 os.remove(img_path)
         out_files = sorted(os.listdir(temp_out))
 
-    # เตรียมภาพพรีวิวสำหรับ Slider
+    # ดึงภาพแรกมาโชว์พรีวิว
     in_files = sorted(os.listdir(temp_in))
     preview_in = os.path.join(temp_in, in_files[0]) if in_files else None
     preview_out = os.path.join(temp_out, out_files[0]) if out_files else None
@@ -92,10 +88,9 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
         zip_path = os.path.join(WORKSPACE_DIR, "output_result.zip")
         if os.path.exists(zip_path): os.remove(zip_path)
         shutil.make_archive(zip_path.replace('.zip', ''), 'zip', temp_out)
-        return (preview_in, preview_out), zip_path
+        return preview_in, preview_out, zip_path
     else:
-        return (preview_in, preview_out), os.path.join(temp_out, out_files[0])
-
+        return preview_in, preview_out, os.path.join(temp_out, out_files[0])
 
 # --- UI ---
 with gr.Blocks() as demo:
@@ -111,7 +106,7 @@ with gr.Blocks() as demo:
                     "7B GGUF Q4 (สวยและประหยัด VRAM)",
                     "7B FP8 (ภาพสวยสุด/กิน VRAM โหด)"
                 ], 
-                label="🧠 เลือกโมเดล (Model Selection)", 
+                label="🧠 เลือกโมเดล", 
                 value="3B FP8 (สมดุล/ค่าเริ่มต้น)"
             )
             upscale_size = gr.Radio(
@@ -119,19 +114,20 @@ with gr.Blocks() as demo:
                 label="ความละเอียดเป้าหมาย", 
                 value="2K (1440p)"
             )
-            format_out = gr.Radio(["png", "jpg"], label="Format ผลลัพธ์", value="jpg") # ตั้งค่าเริ่มต้นเป็น jpg ให้เลย
+            format_out = gr.Radio(["png", "jpg"], label="Format ผลลัพธ์", value="jpg")
             zip_out = gr.Checkbox(label="ดาวน์โหลดกลับเป็นไฟล์ ZIP", value=True)
             submit_btn = gr.Button("เริ่มประมวลผล", variant="primary")
             
         with gr.Column(scale=2):
-            slider_preview = ImageSlider(label="เปรียบเทียบ ก่อน/หลัง (รูปแรก)")
+            with gr.Row():
+                preview_in_ui = gr.Image(label="ภาพก่อนอัป (Before)", type="filepath")
+                preview_out_ui = gr.Image(label="ภาพหลังอัป (After)", type="filepath")
             file_out = gr.File(label="ไฟล์ผลลัพธ์พร้อมดาวน์โหลด ⬇️")
 
     submit_btn.click(
         fn=run_upscale,
         inputs=[file_in, format_out, zip_out, upscale_size, model_choice],
-        outputs=[slider_preview, file_out]
+        outputs=[preview_in_ui, preview_out_ui, file_out]
     )
 
-# กำหนด Port เป็น 7860 เพื่อให้เชื่อมกับระบบ Proxy ของ RunPod ได้ง่าย
 demo.launch(server_name="0.0.0.0", server_port=7860, share=True)

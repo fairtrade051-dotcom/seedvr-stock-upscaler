@@ -5,6 +5,7 @@ import subprocess
 import shutil
 from PIL import Image
 
+# กำหนด Path ให้รันบน RunPod ได้ชัวร์ๆ
 WORKSPACE_DIR = "/workspace/ComfyUI-SeedVR2_VideoUpscaler"
 
 def setup_dirs(input_dir, output_dir):
@@ -21,6 +22,7 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
     if not input_files:
         raise gr.Error("กรุณาอัปโหลดไฟล์ก่อน!")
         
+    # จัดการไฟล์อัปโหลด
     for file_obj in input_files:
         file_path = file_obj.name
         if file_path.endswith('.zip'):
@@ -29,11 +31,13 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
         else:
             shutil.copy(file_path, temp_in)
 
+    # คำนวณความละเอียดเป้าหมาย
     if "2K" in upscale_size: res_val = 1440
     elif "4K" in upscale_size: res_val = 2160
     elif "6K" in upscale_size: res_val = 3240
     else: res_val = 4320
 
+    # เลือกโมเดล
     model_map = {
         "3B FP8 (สมดุล/ค่าเริ่มต้น)": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
         "3B GGUF Q4 (ประหยัด VRAM ขั้นสุด)": "seedvr2_ema_3b-Q4_K_M.gguf",
@@ -44,6 +48,7 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
 
     print(f"🚀 เริ่มรันที่ {res_val}p | โมเดล: {selected_model_file}")
     
+    # คำสั่งรัน AI
     cmd = (
         f"python inference_cli.py "
         f"--output {temp_out} --resolution {res_val} "
@@ -54,18 +59,24 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
         f"{temp_in}"
     )
     
+    # รัน process
     process = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=WORKSPACE_DIR)
     print(process.stdout)
     
+    # ถ้ารันล้มเหลว ให้ดึงข้อความ Error จริงๆ มาโชว์
     if process.returncode != 0:
-        print(process.stderr)
-        raise gr.Error("รันล้มเหลว! ลองลดขนาดภาพหรือเปลี่ยนโมเดล")
+        error_msg = process.stderr.strip()
+        if not error_msg:
+            error_msg = process.stdout.strip() # เผื่อ error ไปโผล่ใน stdout
+        print(f"🔥 ERROR LOG:\n{error_msg}")
+        # ดึง Error 1000 ตัวอักษรสุดท้ายมาโชว์บนเว็บ จะได้รู้ว่าพังเพราะอะไร
+        raise gr.Error(f"AI ทำงานพัง! สาเหตุ: {error_msg[-1000:]}")
 
     out_files = sorted(os.listdir(temp_out))
     if not os.path.exists(temp_out) or len(out_files) == 0:
-        raise gr.Error("ไม่พบไฟล์ผลลัพธ์!")
+        raise gr.Error("รันเสร็จแต่ไม่พบไฟล์ผลลัพธ์ในโฟลเดอร์!")
 
-    # แปลง JPG Quality 100
+    # แปลงผลลัพธ์เป็น JPG Quality 100
     if format_out == 'jpg':
         print("🔄 กำลังแปลงไฟล์เป็น JPG Quality 100...")
         for img in list(out_files):
@@ -120,6 +131,7 @@ with gr.Blocks() as demo:
             
         with gr.Column(scale=2):
             with gr.Row():
+                # เปลี่ยนจาก Slider เป็นภาพคู่ Before/After
                 preview_in_ui = gr.Image(label="ภาพก่อนอัป (Before)", type="filepath")
                 preview_out_ui = gr.Image(label="ภาพหลังอัป (After)", type="filepath")
             file_out = gr.File(label="ไฟล์ผลลัพธ์พร้อมดาวน์โหลด ⬇️")

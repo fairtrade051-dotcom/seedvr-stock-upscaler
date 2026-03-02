@@ -1,4 +1,4 @@
-import gr
+import gradio as gr  # <--- อันนี้ถูกต้อง
 import os
 import zipfile
 import subprocess

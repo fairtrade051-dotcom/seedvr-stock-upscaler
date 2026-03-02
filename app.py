@@ -9,6 +9,8 @@ from PIL import Image
 WORKSPACE_DIR = "/workspace/ComfyUI-SeedVR2_VideoUpscaler"
 
 def setup_dirs(input_dir, output_dir):
+    # ปิดการลบโฟลเดอร์ทิ้งเพื่อความปลอดภัย (ถ้าอยากลบเองค่อยสั่งใน Terminal)
+    # หรือถ้าจะลบ ต้องมั่นใจว่าย้ายไฟล์เก่าออกไปแล้ว
     if os.path.exists(input_dir): shutil.rmtree(input_dir)
     if os.path.exists(output_dir): shutil.rmtree(output_dir)
     os.makedirs(input_dir, exist_ok=True)
@@ -63,33 +65,37 @@ def run_upscale(input_files, format_out, zip_out, upscale_size, model_choice):
     process = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=WORKSPACE_DIR)
     print(process.stdout)
     
-    # ถ้ารันล้มเหลว ให้ดึงข้อความ Error จริงๆ มาโชว์
     if process.returncode != 0:
-        error_msg = process.stderr.strip()
-        if not error_msg:
-            error_msg = process.stdout.strip() # เผื่อ error ไปโผล่ใน stdout
+        error_msg = process.stderr.strip() or process.stdout.strip()
         print(f"🔥 ERROR LOG:\n{error_msg}")
-        # ดึง Error 1000 ตัวอักษรสุดท้ายมาโชว์บนเว็บ จะได้รู้ว่าพังเพราะอะไร
         raise gr.Error(f"AI ทำงานพัง! สาเหตุ: {error_msg[-1000:]}")
 
+    # ดึงรายชื่อไฟล์หลัง AI ทำงานเสร็จ
     out_files = sorted(os.listdir(temp_out))
-    if not os.path.exists(temp_out) or len(out_files) == 0:
-        raise gr.Error("รันเสร็จแต่ไม่พบไฟล์ผลลัพธ์ในโฟลเดอร์!")
-
-    # แปลงผลลัพธ์เป็น JPG Quality 100
+    
+    # --- ส่วนแปลงไฟล์เป็น JPG (ปรับปรุงใหม่) ---
     if format_out == 'jpg':
-        print("🔄 กำลังแปลงไฟล์เป็น JPG Quality 100...")
-        for img in list(out_files):
-            if img.endswith('.png'):
+        print("🔄 กำลังแปลงไฟล์เป็น JPG Quality 100 (No Subsampling)...")
+        for img in out_files:
+            if img.lower().endswith('.png'):
                 img_path = os.path.join(temp_out, img)
-                new_path = os.path.join(temp_out, img.replace('.png', '.jpg'))
+                new_name = os.path.splitext(img)[0] + ".jpg"
+                new_path = os.path.join(temp_out, new_name)
+                
                 with Image.open(img_path) as im:
                     rgb_im = im.convert('RGB')
-                    rgb_im.save(new_path, quality=100)
-                os.remove(img_path)
+                    # บังคับคุณภาพสูงสุด และปิดการบีบอัดสี (subsampling=0)
+                    rgb_im.save(new_path, "JPEG", quality=100, subsampling=0)
+                
+                os.remove(img_path) # ลบ PNG ทิ้ง
+        
+        # อัปเดตรายชื่อไฟล์ใหม่หลังจากแปลงแล้ว
         out_files = sorted(os.listdir(temp_out))
 
-    # ดึงภาพแรกมาโชว์พรีวิว
+    if not out_files:
+        raise gr.Error("รันเสร็จแต่ไม่พบไฟล์ผลลัพธ์!")
+
+    # พรีวิวภาพแรก
     in_files = sorted(os.listdir(temp_in))
     preview_in = os.path.join(temp_in, in_files[0]) if in_files else None
     preview_out = os.path.join(temp_out, out_files[0]) if out_files else None
@@ -131,7 +137,6 @@ with gr.Blocks() as demo:
             
         with gr.Column(scale=2):
             with gr.Row():
-                # เปลี่ยนจาก Slider เป็นภาพคู่ Before/After
                 preview_in_ui = gr.Image(label="ภาพก่อนอัป (Before)", type="filepath")
                 preview_out_ui = gr.Image(label="ภาพหลังอัป (After)", type="filepath")
             file_out = gr.File(label="ไฟล์ผลลัพธ์พร้อมดาวน์โหลด ⬇️")
@@ -142,4 +147,5 @@ with gr.Blocks() as demo:
         outputs=[preview_in_ui, preview_out_ui, file_out]
     )
 
-demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
+# เพิ่ม .queue() เพื่อป้องกันหน้าเว็บเด้งตอนรันนานๆ
+demo.queue().launch(server_name="0.0.0.0", server_port=7860, share=True)

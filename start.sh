@@ -11,8 +11,8 @@ cp /workspace/my_template_repo/app.py /workspace/ComfyUI-SeedVR2_VideoUpscaler/
 
 cd /workspace/ComfyUI-SeedVR2_VideoUpscaler
 
-# 3. ติดตั้ง Dependencies (เพิ่ม opencv-python-headless แก้อาการ cv2 หาย)
-pip install einops safetensors diffusers transformers accelerate pillow gradio opencv-python-headless
+# 3. ติดตั้ง Dependencies (ล็อกเวอร์ชัน diffusers แก้บั๊ก xpu)
+pip install einops safetensors "diffusers==0.29.2" transformers accelerate pillow gradio opencv-python-headless
 
 # 4. รันหน้าเว็บ
 python app.py

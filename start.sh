@@ -1,18 +1,18 @@
 #!/bin/bash
-
 cd /workspace
 
+# 1. โหลดโค้ด AI ต้นฉบับ
 if [ ! -d "ComfyUI-SeedVR2_VideoUpscaler" ]; then
     git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git
 fi
 
-# ก๊อปปี้ app.py ไปใส่
+# 2. ก๊อปไฟล์หน้าเว็บ (app.py) จาก Repo ของคุณไปใส่ในโฟลเดอร์ AI
 cp /workspace/my_template_repo/app.py /workspace/ComfyUI-SeedVR2_VideoUpscaler/
 
 cd /workspace/ComfyUI-SeedVR2_VideoUpscaler
 
-# ลงเฉพาะตัวที่จำเป็น (ตัด Slider ออกแล้ว)
-pip install einops safetensors diffusers transformers accelerate pillow gradio
+# 3. ติดตั้ง Dependencies (เพิ่ม opencv-python-headless แก้อาการ cv2 หาย)
+pip install einops safetensors diffusers transformers accelerate pillow gradio opencv-python-headless
 
-# รันหน้าเว็บ
+# 4. รันหน้าเว็บ
 python app.py

@@ -22,8 +22,9 @@ state = GlobalState()
 
 def setup_dirs():
     """เตรียมโฟลเดอร์ทำงาน"""
-    if not os.path.exists(temp_in): os.makedirs(temp_in)
-    if not os.path.exists(temp_out): os.makedirs(temp_out)
+    for d in [temp_in, temp_out]:
+        if not os.path.exists(d):
+            os.makedirs(d)
 
 def handle_upload(files):
     """จัดการไฟล์ที่อัปโหลดและส่งรูปแรกไปโชว์ Before ทันที"""
@@ -43,7 +44,7 @@ def handle_upload(files):
     
     all_files = sorted([f for f in os.listdir(temp_in) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
     
-    # ดึง Path ของรูปแรกมาโชว์พรีวิว
+    # ดึง Path ของรูปแรกมาโชว์พรีวิวทันที
     first_image_path = os.path.join(temp_in, all_files[0]) if all_files else None
     
     return f"📦 พร้อมประมวลผล: {len(all_files)} รูป", all_files, first_image_path
@@ -74,10 +75,9 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
 
         input_path = os.path.join(temp_in, filename)
         
-        # อัปเดตสถานะและพรีวิวรูปฝั่งซ้าย (Before)
-        msg = f"⏳ กำลังรันรูป {i+1}/{total}: {filename}"
+        # ส่งรูป Before เข้าไปโชว์ใน UI และอัปเดตสถานะ
         progress(i/total, desc=f"ทำรูปที่ {i+1}/{total}")
-        yield msg, input_path, None, None
+        yield f"⏳ กำลังรันรูป {i+1}/{total}: {filename}", input_path, None, None
 
         cmd = [
             "python", "inference_cli.py", "--output", temp_out, "--resolution", str(res_val),
@@ -86,16 +86,17 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
             "--dit_offload_device", "cpu", input_path
         ]
         
+        # รัน AI และรอผล
         subprocess.run(cmd, capture_output=True, text=True, cwd=WORKSPACE_DIR)
 
-        # หาไฟล์ผลลัพธ์
+        # ค้นหาไฟล์ผลลัพธ์
         new_files = [f for f in os.listdir(temp_out) if f.lower().endswith(('.png', '.jpg'))]
         base_name = os.path.splitext(filename)[0]
         matches = [f for f in new_files if base_name in f]
 
         if matches:
             out_path = os.path.join(temp_out, matches[-1])
-            # แปลงไฟล์เป็น JPG (จุดที่แก้ Syntax Error)
+            # แปลงเป็น JPG
             if format_out == 'jpg' and out_path.lower().endswith('.png'):
                 jpg_path = os.path.splitext(out_path)[0] + ".jpg"
                 with Image.open(out_path) as im:
@@ -103,7 +104,7 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
                 os.remove(out_path)
                 out_path = jpg_path
             
-            # ส่งผลลัพธ์ไปโชว์ฝั่งขวา (After)
+            # ส่งผลลัพธ์ไปโชว์ฝั่งขวา (After) คู่กับฝั่งซ้าย (Before)
             yield f"✅ เสร็จรูปที่ {i+1}/{total}", input_path, out_path, None
         else:
             yield f"⚠️ หารูป {filename} ไม่เจอ", input_path, None, None
@@ -118,7 +119,8 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
         yield "❌ ไม่พบไฟล์ผลลัพธ์ที่รันสำเร็จ", None, None, None
 
 # --- UI Layout ---
-with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0b111b; color: #ffffff;}") as demo:
+# ย้าย css ออกจาก gr.Blocks() เพื่อแก้ Warning
+with gr.Blocks(title="SeedVR2 Pro") as demo:
     gr.Markdown("# 🚀 SeedVR2 Auto Upscaler Pro")
     
     files_state = gr.State([])
@@ -143,6 +145,7 @@ with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0
 
         with gr.Column(scale=2):
             with gr.Row():
+                # ปรับให้รูปแสดงผลแบบยืดหยุ่นและชัดเจน
                 prev_before = gr.Image(label="ก่อน (Before)", type="filepath", interactive=False)
                 prev_after = gr.Image(label="หลัง (After)", type="filepath", interactive=False)
             download_ui = gr.File(label="⬇️ ดาวน์โหลด ZIP")
@@ -162,4 +165,11 @@ with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0
 
 if __name__ == "__main__":
     setup_dirs()
-    demo.queue().launch(server_name="0.0.0.0", server_port=7860, share=True, allowed_paths=["/workspace"])
+    # นำ css มาใส่ไว้ใน launch() ตามที่ Gradio 6.0 แนะนำ
+    demo.queue().launch(
+        server_name="0.0.0.0", 
+        server_port=7860, 
+        share=True, 
+        allowed_paths=["/workspace"],
+        css=".gradio-container {background-color: #0b111b; color: #ffffff;}"
+    )

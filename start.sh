@@ -11,11 +11,14 @@ cp /workspace/my_template_repo/app.py /workspace/ComfyUI-SeedVR2_VideoUpscaler/
 
 cd /workspace/ComfyUI-SeedVR2_VideoUpscaler
 
-# 3. อัปเกรด PyTorch ให้เป็นเวอร์ชัน 2.4+
+# 3. ติดตั้ง Dependencies และ Jupyter Lab
+# เพิ่ม jupyterlab เข้าไปในลิสต์ติดตั้ง
 pip install torch torchvision torchaudio --upgrade --index-url https://download.pytorch.org/whl/cu121
+pip install jupyterlab einops safetensors "diffusers==0.29.2" transformers accelerate pillow gradio opencv-python-headless rotary-embedding-torch omegaconf gguf
 
-# 4. ติดตั้ง Dependencies (เพิ่ม gguf เข้าไปท้ายสุดแล้ว)
-pip install einops safetensors "diffusers==0.29.2" transformers accelerate pillow gradio opencv-python-headless rotary-embedding-torch omegaconf gguf
+# 4. สั่งรัน Jupyter Lab ในเบื้องหลัง (พอร์ต 8080)
+# เครื่องหมาย & ที่ต่อท้ายหมายถึงให้รันค้างไว้แล้วไปทำคำสั่งถัดไปทันที
+nohup jupyter lab --allow-root --ip=0.0.0.0 --port=8080 --no-browser --ServerApp.token='' --ServerApp.password='' > /workspace/jupyter.log 2>&1 &
 
-# 5. รันหน้าเว็บ
+# 5. รันหน้าเว็บ AI (พอร์ต 7860) เป็นหลัก
 python app.py

@@ -30,7 +30,7 @@ def handle_upload(files):
     if not files:
         return "⚠️ ยังไม่มีไฟล์ถูกเลือก", [], None
     
-    # ล้างข้อมูลเก่าเฉพาะใน temp_in
+    # ล้างข้อมูลเก่า
     if os.path.exists(temp_in): shutil.rmtree(temp_in)
     os.makedirs(temp_in, exist_ok=True)
 
@@ -52,6 +52,7 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
     """รัน AI ทีละรูป และอัปเดตพรีวิว Before/After"""
     state.is_running = True
     state.should_cancel = False
+    state.is_paused = False
     
     # ล้าง Output เก่าก่อนรันใหม่
     if os.path.exists(temp_out): shutil.rmtree(temp_out)
@@ -73,9 +74,10 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
 
         input_path = os.path.join(temp_in, filename)
         
-        # อัปเดตพรีวิว Before และสถานะก่อนเริ่มทำ
+        # อัปเดตสถานะและพรีวิวรูปฝั่งซ้าย (Before)
+        msg = f"⏳ กำลังรันรูป {i+1}/{total}: {filename}"
         progress(i/total, desc=f"ทำรูปที่ {i+1}/{total}")
-        yield f"⏳ กำลังรันรูป {i+1}/{total}", input_path, None, None
+        yield msg, input_path, None, None
 
         cmd = [
             "python", "inference_cli.py", "--output", temp_out, "--resolution", str(res_val),
@@ -93,13 +95,15 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
 
         if matches:
             out_path = os.path.join(temp_out, matches[-1])
+            # แปลงไฟล์เป็น JPG (จุดที่แก้ Syntax Error)
             if format_out == 'jpg' and out_path.lower().endswith('.png'):
                 jpg_path = os.path.splitext(out_path)[0] + ".jpg"
-                with Image.open(out_path).convert('RGB').save(jpg_path, "JPEG", quality=100, subsampling=0)
+                with Image.open(out_path) as im:
+                    im.convert('RGB').save(jpg_path, "JPEG", quality=100, subsampling=0)
                 os.remove(out_path)
                 out_path = jpg_path
             
-            # เมื่อเสร็จแต่ละรูป ให้ส่งทั้ง Before และ After ไปโชว์
+            # ส่งผลลัพธ์ไปโชว์ฝั่งขวา (After)
             yield f"✅ เสร็จรูปที่ {i+1}/{total}", input_path, out_path, None
         else:
             yield f"⚠️ หารูป {filename} ไม่เจอ", input_path, None, None
@@ -107,11 +111,14 @@ def process_images(file_list, format_out, upscale_size, model_choice, progress=g
     # จบงาน บีบ ZIP
     zip_path = os.path.join(WORKSPACE_DIR, "output_result.zip")
     if os.path.exists(zip_path): os.remove(zip_path)
-    shutil.make_archive(zip_path.replace('.zip', ''), 'zip', temp_out)
-    yield "🎉 เสร็จครบทุกรูปแล้ว!", None, None, zip_path
+    if os.listdir(temp_out):
+        shutil.make_archive(zip_path.replace('.zip', ''), 'zip', temp_out)
+        yield "🎉 เสร็จครบทุกรูปแล้ว!", None, None, zip_path
+    else:
+        yield "❌ ไม่พบไฟล์ผลลัพธ์ที่รันสำเร็จ", None, None, None
 
 # --- UI Layout ---
-with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0b111b; color: white;}") as demo:
+with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0b111b; color: #ffffff;}") as demo:
     gr.Markdown("# 🚀 SeedVR2 Auto Upscaler Pro")
     
     files_state = gr.State([])
@@ -136,7 +143,6 @@ with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0
 
         with gr.Column(scale=2):
             with gr.Row():
-                # เพิ่ม type="filepath" เพื่อให้รูปขึ้นแน่นอน
                 prev_before = gr.Image(label="ก่อน (Before)", type="filepath", interactive=False)
                 prev_after = gr.Image(label="หลัง (After)", type="filepath", interactive=False)
             download_ui = gr.File(label="⬇️ ดาวน์โหลด ZIP")
@@ -144,7 +150,11 @@ with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0
     # --- Logic ---
     upload_ui.change(handle_upload, inputs=[upload_ui], outputs=[status_msg, files_state, prev_before])
     
-    pause_btn.click(lambda: setattr(state, 'is_paused', not state.is_paused), outputs=None)
+    def toggle_pause():
+        state.is_paused = not state.is_paused
+        return "▶️ ทำต่อ" if state.is_paused else "⏸️ พัก"
+
+    pause_btn.click(toggle_pause, outputs=[pause_btn])
     cancel_btn.click(lambda: setattr(state, 'should_cancel', True), outputs=None)
     restart_btn.click(lambda: (setup_dirs(), "### 📋 พร้อมรันใหม่", None, None, None)[1:], outputs=[status_msg, prev_before, prev_after, download_ui])
 
@@ -152,5 +162,4 @@ with gr.Blocks(title="SeedVR2 Pro", css=".gradio-container {background-color: #0
 
 if __name__ == "__main__":
     setup_dirs()
-    # กำหนด allowed_paths เพื่อให้ Gradio เข้าถึงไฟล์ใน /workspace ได้
     demo.queue().launch(server_name="0.0.0.0", server_port=7860, share=True, allowed_paths=["/workspace"])
